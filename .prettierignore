@@ -1,0 +1,17 @@
+dist/
+webDist/
+distWeb/
+distLambda/
+goldstackLocal/
+coverage/
+public/
+src/components/ui/
+src/components/magicui/
+node_modules/
+.next/
+.terraform/
+*.tfstate
+*.tfstate.backup
+.pnp.js
+*.json
+.yarn/
