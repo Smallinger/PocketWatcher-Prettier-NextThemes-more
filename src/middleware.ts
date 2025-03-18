@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { isTokenExpired } from "pocketbase";
+import PocketBase from "pocketbase";
 
-export function middleware(request: NextRequest) {
+export async function middleware(request: NextRequest) {
 	// Protected routes
 	const protectedPaths = ["/dashboard"];
 	const isProtectedPath = protectedPaths.some((path) =>
@@ -15,8 +16,44 @@ export function middleware(request: NextRequest) {
 	);
 
 	const authCookie = request.cookies.get("pb_auth");
-	const token = authCookie?.value ? JSON.parse(authCookie.value).token : null;
-	const isAuthenticated = token && !isTokenExpired(token);
+
+	let isAuthenticated = false;
+	let response = NextResponse.next();
+
+	if (authCookie?.value) {
+		try {
+			const { token, model } = JSON.parse(authCookie.value);
+
+			// Check if the token is expired
+			if (!isTokenExpired(token)) {
+				// Token is valid, now check if the user still exists
+				const pb = new PocketBase(process.env.NEXT_PUBLIC_POCKETBASE_URL);
+				pb.authStore.save(token, model);
+
+				try {
+					// Try to retrieve the user
+					await pb.collection("users").getOne(model.id);
+					isAuthenticated = true;
+				} catch (error) {
+					console.error(error);
+					// User no longer exists or other error
+					isAuthenticated = false;
+					// Delete cookie
+					response = NextResponse.next();
+					response.cookies.delete("pb_auth");
+				}
+			} else {
+				// Token is expired, delete cookie
+				response = NextResponse.next();
+				response.cookies.delete("pb_auth");
+			}
+		} catch (error) {
+			// Error parsing the cookie or other errors
+			console.error(error);
+			response = NextResponse.next();
+			response.cookies.delete("pb_auth");
+		}
+	}
 
 	// Redirect authenticated users away from auth pages
 	if (isAuthPath && isAuthenticated) {
@@ -28,5 +65,5 @@ export function middleware(request: NextRequest) {
 		return NextResponse.redirect(new URL("/", request.url));
 	}
 
-	return NextResponse.next();
+	return response;
 }
